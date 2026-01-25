@@ -1,0 +1,89 @@
+:root {
+  box-sizing: border-box;
+  background-color: #2a2e32;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+p {
+  margin: 0;
+}
+
+#root {
+  width: 500px;
+}
+
+button {
+  border: none;
+}
+
+button:enabled {
+  cursor: pointer;
+}
+
+.popup__icon-button {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: whitesmoke;
+  background-color: transparent;
+  border-radius: 0.25rem;
+  aspect-ratio: 1;
+}
+
+.popup__icon-button:hover {
+  background-color: #ffffff11;
+}
+
+.popup__icon-button:active {
+  background-color: #ffffff1f;
+}
+
+.popup__container {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  gap: 0.25rem;
+}
+
+.popup__title-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.popup__card-template-input-header {
+  font-size: 1rem;
+  color: whitesmoke;
+  padding: 0;
+  margin: 0;
+}
+
+.popup__card-template-input-text {
+  font-size: 0.8rem;
+  color: whitesmoke;
+}
+
+.popup__card-template-input-text--monospace {
+  font-family: monospace;
+}
+
+.popup__card-template-input-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.popup__card-template-input {
+  flex: 1;
+  color: whitesmoke;
+  background-color: #1b1e20;
+  border-width: 0;
+  padding: 0.3rem;
+  border-radius: 0.25rem;
+}
