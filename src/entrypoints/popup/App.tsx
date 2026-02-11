@@ -50,7 +50,7 @@ export function App() {
         are replaced with their respective values. Supported variables are:
         <br />
         <span className="popup__card-template-input-text--monospace">
-          name, artist, set, collectorNumber
+          name, artist, set, collectorNumber, clipboard
         </span>
       </p>
       {cardNameTemplates.map((template, idx) => (

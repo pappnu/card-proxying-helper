@@ -62,7 +62,7 @@ export default defineBackground(() => {
     }
   }
 
-  async function formatCardName(
+  async function copyCardNameTemplate(
     template: string,
     tab: Browser.tabs.Tab,
     {
@@ -73,152 +73,151 @@ export default defineBackground(() => {
     if (tab.id !== undefined) {
       if (template) {
         const card = await parseCardDetails(tab, getArtist);
-        await writeToClipboard(
-          tab.id,
-          template
-            .replace("{{name}}", card.name)
-            .replace("{{artist}}", card.artist || artist)
-            .replace("{{set}}", card.set)
-            .replace("{{collectorNumber}}", card.collectorNumber),
-        );
+        let formattedStr = template
+          .replace("{{name}}", card.name)
+          .replace("{{artist}}", card.artist || artist)
+          .replace("{{set}}", card.set)
+          .replace("{{collectorNumber}}", card.collectorNumber);
+        if (template.includes("{{clipboard}}")) {
+          formattedStr = formattedStr.replace(
+            "{{clipboard}}",
+            await readClipboard(tab.id),
+          );
+        }
+        await writeToClipboard(tab.id, formattedStr);
       }
     }
   }
 
   const documentUrlPatterns = ["https://scryfall.com/card/*"];
 
-  const copySet = createContextMenu({
-    title: "[set] {number}",
-    contexts: ["page"],
-    documentUrlPatterns,
-  });
-  const copyBlankArtistAndSet = createContextMenu({
-    title: "() [set] {number}",
-    contexts: ["page"],
-    documentUrlPatterns,
-  });
-  const copyFullNameId = createContextMenu({
-    title: "name (artist) [set] {number}",
-    contexts: ["page"],
-    documentUrlPatterns,
-  });
-  const copyFullNameNoArtistId = createContextMenu({
-    title: "name () [set] {number}",
-    contexts: ["page"],
-    documentUrlPatterns,
-  });
-  const copyFullNameInjectArtistId = createContextMenu({
-    title: "name (clipboard) [set] {number}",
-    contexts: ["page"],
-    documentUrlPatterns,
-  });
+  browser.contextMenus.removeAll().then(() => {
+    const copySet = createContextMenu({
+      title: "[set] {number}",
+      contexts: ["page"],
+      documentUrlPatterns,
+    });
+    const copyBlankArtistAndSet = createContextMenu({
+      title: "() [set] {number}",
+      contexts: ["page"],
+      documentUrlPatterns,
+    });
+    const copyFullNameId = createContextMenu({
+      title: "name (artist) [set] {number}",
+      contexts: ["page"],
+      documentUrlPatterns,
+    });
+    const copyFullNameNoArtistId = createContextMenu({
+      title: "name () [set] {number}",
+      contexts: ["page"],
+      documentUrlPatterns,
+    });
+    const copyFullNameInjectArtistId = createContextMenu({
+      title: "name (clipboard) [set] {number}",
+      contexts: ["page"],
+      documentUrlPatterns,
+    });
 
-  browser.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (tab)
-      switch (info.menuItemId) {
-        case copySet:
-          await copyCardName(tab, { includeArtist: false, includeName: false });
-          break;
-        case copyBlankArtistAndSet:
-          await copyCardName(tab, { includeName: false });
-          break;
-        case copyFullNameId:
-          await copyCardName(tab, { getArtist: true });
-          break;
-        case copyFullNameNoArtistId:
-          await copyCardName(tab);
-          break;
-        case copyFullNameInjectArtistId:
-          if (tab.id !== undefined)
-            copyCardName(tab, { artist: await readClipboard(tab.id) });
-          break;
+    browser.contextMenus.onClicked.addListener(async (info, tab) => {
+      if (tab)
+        switch (info.menuItemId) {
+          case copySet:
+            await copyCardName(tab, {
+              includeArtist: false,
+              includeName: false,
+            });
+            break;
+          case copyBlankArtistAndSet:
+            await copyCardName(tab, { includeName: false });
+            break;
+          case copyFullNameId:
+            await copyCardName(tab, { getArtist: true });
+            break;
+          case copyFullNameNoArtistId:
+            await copyCardName(tab);
+            break;
+          case copyFullNameInjectArtistId:
+            if (tab.id !== undefined)
+              copyCardName(tab, { artist: await readClipboard(tab.id) });
+            break;
 
-        default:
-          break;
+          default:
+            break;
+        }
+    });
+
+    const cardNameTemplateContextMenuIds: (string | number)[] = [];
+    let cardNameTemplateContextMenusListener:
+      | ((
+          info: Browser.contextMenus.OnClickData,
+          tab?: Browser.tabs.Tab,
+        ) => void)
+      | undefined = undefined;
+
+    function createCardNameTemplateContextMenus(cardNameTemplates: unknown[]) {
+      // Clean up old template context menus
+      for (const id of cardNameTemplateContextMenuIds.splice(0)) {
+        browser.contextMenus.remove(id);
       }
-  });
-
-  const cardNameTemplateContextMenuIds: string[] = [];
-  let cardNameTemplateContextMenusListener:
-    | ((info: Browser.contextMenus.OnClickData, tab?: Browser.tabs.Tab) => void)
-    | undefined = undefined;
-
-  function createCardNameTemplateContextMenus(cardNameTemplates: unknown[]) {
-    // Cleanup old template context menus
-    for (const id of cardNameTemplateContextMenuIds.splice(0)) {
-      browser.contextMenus.remove(id);
-    }
-    if (cardNameTemplateContextMenusListener)
-      browser.contextMenus.onClicked.removeListener(
-        cardNameTemplateContextMenusListener,
-      );
-
-    const newIds: string[] = [];
-    const actions: ((tab: Browser.tabs.Tab) => Promise<unknown>)[] = [];
-    for (const template of cardNameTemplates) {
-      if (typeof template === "string" && template) {
-        newIds.push(
-          createContextMenu({
-            title: template,
-            contexts: ["page"],
-            documentUrlPatterns,
-          }),
+      if (cardNameTemplateContextMenusListener)
+        browser.contextMenus.onClicked.removeListener(
+          cardNameTemplateContextMenusListener,
         );
-        actions.push((tab) =>
-          formatCardName(template, tab, { getArtist: true }),
-        );
-        if (template.includes("{{artist}}")) {
+
+      const newIds: (string | number)[] = [];
+      const actions: ((tab: Browser.tabs.Tab) => Promise<unknown>)[] = [];
+      for (const template of cardNameTemplates) {
+        if (typeof template === "string" && template) {
           newIds.push(
             createContextMenu({
-              title: template.replace("{{artist}}", "{{clipboard}}"),
+              title: template,
               contexts: ["page"],
               documentUrlPatterns,
             }),
           );
-          actions.push(
-            async (tab) =>
-              tab.id !== undefined &&
-              formatCardName(template, tab, {
-                artist: await readClipboard(tab.id),
-              }),
-          );
+          actions.push(async (tab) => {
+            await copyCardNameTemplate(template, tab, { getArtist: true });
+          });
         }
       }
-    }
 
-    cardNameTemplateContextMenusListener = async (
-      info: Browser.contextMenus.OnClickData,
-      tab?: Browser.tabs.Tab,
-    ) => {
-      if (tab) {
-        for (let index = 0; index < newIds.length; index++) {
-          const id = newIds[index];
-          if (id === info.menuItemId) {
-            actions[index](tab);
-            break;
+      cardNameTemplateContextMenusListener = async (
+        info: Browser.contextMenus.OnClickData,
+        tab?: Browser.tabs.Tab,
+      ) => {
+        if (tab) {
+          const idIdx = newIds.indexOf(info.menuItemId);
+          for (let index = 0; index < newIds.length; index++) {
+            const id = newIds[index];
+            if (id === info.menuItemId) {
+              await actions[index](tab);
+              break;
+            }
           }
         }
-      }
-    };
-    browser.contextMenus.onClicked.addListener(
-      cardNameTemplateContextMenusListener,
-    );
+      };
+      browser.contextMenus.onClicked.addListener(
+        cardNameTemplateContextMenusListener,
+      );
 
-    cardNameTemplateContextMenuIds.push(...newIds);
-  }
-
-  cardNameTemplatesStorage.getValue().then(createCardNameTemplateContextMenus);
-
-  browser.runtime.onMessage.addListener(async (message: unknown) => {
-    if (
-      message &&
-      typeof message === "object" &&
-      "purpose" in message &&
-      message.purpose === "cardNameTemplates" &&
-      "templates" in message &&
-      Array.isArray(message.templates)
-    ) {
-      createCardNameTemplateContextMenus(message.templates);
+      cardNameTemplateContextMenuIds.push(...newIds);
     }
+
+    cardNameTemplatesStorage
+      .getValue()
+      .then(createCardNameTemplateContextMenus);
+
+    browser.runtime.onMessage.addListener((message: unknown) => {
+      if (
+        message &&
+        typeof message === "object" &&
+        "purpose" in message &&
+        message.purpose === "cardNameTemplates" &&
+        "templates" in message &&
+        Array.isArray(message.templates)
+      ) {
+        createCardNameTemplateContextMenus(message.templates);
+      }
+    });
   });
 });
