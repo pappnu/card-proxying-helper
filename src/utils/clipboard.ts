@@ -9,7 +9,7 @@ export async function writeToClipboard(tabId: number, content: string) {
   const listener = (
     message: { script: string },
     sender: Browser.runtime.MessageSender,
-    sendResponse: (details: WriteToClipboardArgs) => void
+    sendResponse: (details: WriteToClipboardArgs) => void,
   ) => {
     if (sender?.tab?.id === tabId && message?.script === script) {
       sendResponse({ content });

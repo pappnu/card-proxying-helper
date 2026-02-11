@@ -8,7 +8,7 @@ export default defineContentScript({
       undefined,
       {
         script: "writeToClipboard",
-      }
+      },
     );
     await navigator.clipboard.writeText(content);
   },
