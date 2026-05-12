@@ -5,6 +5,7 @@ import {
 } from "@/utils/cardData";
 import { readClipboard, writeToClipboard } from "@/utils/clipboard";
 import { createContextMenu } from "@/utils/contextMenu";
+import { getScryfallCard } from "@/utils/scryfall";
 import { cardNameTemplatesStorage } from "@/utils/storage";
 
 interface CardDetails {
@@ -16,6 +17,8 @@ interface CardDetails {
 
 export default defineBackground(() => {
   const scryfallCardTabTitleRegex = /(.+) · .* \(([^)]+)\) #([^\s]+) ·/;
+  const mtgpicsRefRegex = /([a-zA-Z]+)0*([0-9]+)/;
+
   async function parseCardDetails(
     tab: Browser.tabs.Tab,
     getArtist: boolean = false,
@@ -37,6 +40,37 @@ export default defineBackground(() => {
     throw Error("Tab has no title");
   }
 
+  async function parseMtgpicsCardDetails(
+    tab: Browser.tabs.Tab,
+    url: URL,
+  ): Promise<CardDetails> {
+    const ref = url.searchParams.get("ref");
+    if (!ref)
+      throw new Error(
+        `MTGPics url doesn't contain ref search param: ${tab.url}`,
+      );
+    const match = mtgpicsRefRegex.exec(ref);
+    if (match) {
+      const scryfallCard = await getScryfallCard(match[1], match[2]);
+      if (scryfallCard.ok) {
+        return {
+          name: scryfallCard.data.name,
+          artist: scryfallCard.data.artist,
+          set: scryfallCard.data.set,
+          collectorNumber: scryfallCard.data.collector_number,
+        };
+      } else {
+        throw new Error(
+          `Failed to fetch Scryfall card for MTGPics url: ${tab.url}`,
+        );
+      }
+    } else {
+      throw new Error(
+        `MTGPics ref doesn't conform to expected form: ${tab.url}`,
+      );
+    }
+  }
+
   async function copyCardName(
     tab: Browser.tabs.Tab,
     {
@@ -51,8 +85,16 @@ export default defineBackground(() => {
       getArtist?: boolean;
     } = {},
   ) {
-    if (tab.id !== undefined) {
-      const card = await parseCardDetails(tab, getArtist);
+    if (tab.id !== undefined && tab.url) {
+      let card: CardDetails;
+
+      const tabUrl = new URL(tab.url);
+      if (tabUrl.host.includes("mtgpics.com")) {
+        card = await parseMtgpicsCardDetails(tab, tabUrl);
+      } else {
+        card = await parseCardDetails(tab, getArtist);
+      }
+
       const namePart = includeName ? card.name + " " : "";
       const artistPart = includeArtist ? `(${card.artist || artist}) ` : "";
       await writeToClipboard(
@@ -89,32 +131,35 @@ export default defineBackground(() => {
     }
   }
 
-  const documentUrlPatterns = ["https://scryfall.com/card/*"];
+  const documentUrlPatterns = [
+    "https://scryfall.com/card/*",
+    "https://*.mtgpics.com/card?ref=*",
+  ];
 
   browser.contextMenus.removeAll().then(() => {
     const copySet = createContextMenu({
       title: "[set] {number}",
-      contexts: ["page"],
+      contexts: ["all"],
       documentUrlPatterns,
     });
     const copyBlankArtistAndSet = createContextMenu({
       title: "() [set] {number}",
-      contexts: ["page"],
+      contexts: ["all"],
       documentUrlPatterns,
     });
     const copyFullNameId = createContextMenu({
       title: "name (artist) [set] {number}",
-      contexts: ["page"],
+      contexts: ["all"],
       documentUrlPatterns,
     });
     const copyFullNameNoArtistId = createContextMenu({
       title: "name () [set] {number}",
-      contexts: ["page"],
+      contexts: ["all"],
       documentUrlPatterns,
     });
     const copyFullNameInjectArtistId = createContextMenu({
       title: "name (clipboard) [set] {number}",
-      contexts: ["page"],
+      contexts: ["all"],
       documentUrlPatterns,
     });
 
@@ -171,7 +216,7 @@ export default defineBackground(() => {
           newIds.push(
             createContextMenu({
               title: template,
-              contexts: ["page"],
+              contexts: ["all"],
               documentUrlPatterns,
             }),
           );
