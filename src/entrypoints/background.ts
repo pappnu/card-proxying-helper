@@ -17,9 +17,9 @@ interface CardDetails {
 
 export default defineBackground(() => {
   const scryfallCardTabTitleRegex = /(.+) · .* \(([^)]+)\) #([^\s]+) ·/;
-  const mtgpicsRefRegex = /([a-zA-Z]+)0*([0-9]+)/;
+  const mtgpicsRefRegex = /([a-zA-Z0-9]{3}[a-zA-Z]*)0*([0-9]+)/;
 
-  async function parseCardDetails(
+  async function parseCardDetailsScryfall(
     tab: Browser.tabs.Tab,
     getArtist: boolean = false,
   ): Promise<CardDetails> {
@@ -71,6 +71,18 @@ export default defineBackground(() => {
     }
   }
 
+  async function parseCardDetails(
+    tab: Browser.tabs.Tab,
+    url: URL,
+    getArtist: boolean = false,
+  ): Promise<CardDetails> {
+    if (url.host.includes("scryfall.com")) {
+      return await parseCardDetailsScryfall(tab, getArtist);
+    } else {
+      return await parseMtgpicsCardDetails(tab, url);
+    }
+  }
+
   async function copyCardName(
     tab: Browser.tabs.Tab,
     {
@@ -89,11 +101,7 @@ export default defineBackground(() => {
       let card: CardDetails;
 
       const tabUrl = new URL(tab.url);
-      if (tabUrl.host.includes("mtgpics.com")) {
-        card = await parseMtgpicsCardDetails(tab, tabUrl);
-      } else {
-        card = await parseCardDetails(tab, getArtist);
-      }
+      card = await parseCardDetails(tab, tabUrl, getArtist);
 
       const namePart = includeName ? card.name + " " : "";
       const artistPart = includeArtist ? `(${card.artist || artist}) ` : "";
@@ -112,9 +120,9 @@ export default defineBackground(() => {
       getArtist = false,
     }: { artist?: string; getArtist?: boolean } = {},
   ) {
-    if (tab.id !== undefined) {
+    if (tab.url && tab.id !== undefined) {
       if (template) {
-        const card = await parseCardDetails(tab, getArtist);
+        const card = await parseCardDetails(tab, new URL(tab.url), getArtist);
         let formattedStr = template
           .replace("{{name}}", card.name)
           .replace("{{artist}}", card.artist || artist)
@@ -133,7 +141,9 @@ export default defineBackground(() => {
 
   const documentUrlPatterns = [
     "https://scryfall.com/card/*",
-    "https://*.mtgpics.com/card?ref=*",
+    "https://*.mtgpics.com/*?ref=*",
+    "https://*.mtgpics.com/*?gamerid=*",
+    "https://*.magic-ville.com/*?ref=*",
   ];
 
   browser.contextMenus.removeAll().then(() => {
